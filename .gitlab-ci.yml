@@ -1,0 +1,88 @@
+# =============================================================================
+# GitLab CI - Part A: offline checks on every merge request and on main.
+#
+# None of these jobs talks to Azure: no credentials exist in this pipeline.
+# They run the same checks as `make ci` on the laptop:
+#   fmt + validate  ->  tflint  ->  checkov  ->  terraform test (mock providers)
+#
+# A merge request can only be merged when this pipeline is green
+# (Settings > Merge requests > "Pipelines must succeed").
+# =============================================================================
+
+# Run one pipeline per change: for a merge request, or for main - never both
+# for the same push.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages:
+  - validate
+  - security
+  - test
+
+variables:
+  # Providers are downloaded once per pipeline cache, not once per folder.
+  TF_PLUGIN_CACHE_DIR: "$CI_PROJECT_DIR/.terraform-plugin-cache"
+  TF_IN_AUTOMATION: "true"
+
+# Shared settings for jobs that run Terraform. Versions are pinned so the
+# pipeline doesn't change underneath you - same as .terraform-version.
+.terraform:
+  image:
+    name: hashicorp/terraform:1.16.4
+    entrypoint: [""]
+  before_script:
+    - mkdir -p "$TF_PLUGIN_CACHE_DIR"
+  cache:
+    key: terraform-providers
+    paths:
+      - .terraform-plugin-cache/
+
+fmt-validate:
+  extends: .terraform
+  stage: validate
+  script:
+    - terraform fmt -check -recursive -diff
+    - |
+      for d in bootstrap envs/dev; do
+        echo "== $d"
+        terraform -chdir=$d init -backend=false -input=false >/dev/null
+        terraform -chdir=$d validate
+      done
+
+tflint:
+  stage: validate
+  image:
+    name: ghcr.io/terraform-linters/tflint:v0.65.0
+    entrypoint: [""]
+  variables:
+    TFLINT_PLUGIN_DIR: "$CI_PROJECT_DIR/.tflint.d/plugins"
+  cache:
+    key: tflint-plugins
+    paths:
+      - .tflint.d/plugins/
+  script:
+    - tflint --init
+    - tflint --recursive
+
+checkov:
+  stage: security
+  image:
+    name: bridgecrew/checkov:3.4.3
+    entrypoint: [""]
+  script:
+    - checkov --config-file .checkov.yaml
+
+terraform-test:
+  extends: .terraform
+  stage: test
+  script:
+    - |
+      for m in modules/*/; do
+        echo "== $m"
+        terraform -chdir=$m init -backend=false -input=false >/dev/null
+        terraform -chdir=$m test
+      done

@@ -2,6 +2,7 @@
 
 > A small, secure Azure foundation written as Terraform modules: remote state, a private network, an RBAC Key Vault and a VM that reads exactly one secret with its managed identity - guarded by Azure Policy, tested offline, and built entirely on the Azure free account.
 
+[![pipeline](https://gitlab.com/alex.iglesias7/terraform-azure-foundation/badges/main/pipeline.svg)](https://gitlab.com/alex.iglesias7/terraform-azure-foundation/-/pipelines)
 [![terraform](https://img.shields.io/badge/terraform-1.16-7B42BC)](https://developer.hashicorp.com/terraform)
 [![azurerm provider](https://img.shields.io/badge/azurerm%20provider-4.x-0078D4)](https://registry.terraform.io/providers/hashicorp/azurerm/latest)
 [![tests](https://img.shields.io/badge/terraform%20test-13%20passing-brightgreen)](#how-its-tested)
@@ -188,7 +189,7 @@ Policy identifiers: '[{"policyAssignment":{"name":"Allowed locations: swedencent
 
 ```
 $ make security
-Passed checks: 26, Failed checks: 0, Skipped checks: 7
+Passed checks: 35, Failed checks: 0, Skipped checks: 11
 
 $ make test
 Success! 5 passed, 0 failed.   # compute
@@ -247,7 +248,8 @@ A budget in `bootstrap/` emails at 80% and 100% of £5/month and on the forecast
 ## How it's tested
 
 - **`make test`** runs 13 `terraform test` unit tests with mock providers: no Azure login, no cost. They check the promises the design depends on - private subnets, the Key Vault service endpoint, only 80/443 open on web, the app tier reachable only from web, RBAC and default-deny on the vault, a write-only secret, no public IP, the free P6 disk, the one-secret role scope, the arm64 image on Arm sizes - and that bad input is rejected (a billed VM size, a non-public SSH key, a too-long vault name, an IP without `/32`).
-- **tflint** with the azurerm ruleset, and **checkov** for misconfigurations and leaked secrets. checkov reports **0 failed checks**. The 7 accepted findings are skipped inline, next to the resource, each with its reason: features that cost money (geo-replication, queue logging), access the laptop and CI need, purge protection (it would block `make destroy`), the Run Command agent, and port 80 on the web tier.
+- **tflint** with the azurerm ruleset, and **checkov** for misconfigurations and leaked secrets. checkov reports **0 failed checks**. The 11 accepted findings are skipped inline, next to the resource, each with its reason: features that cost money (private endpoints, customer-managed keys, geo-replication, storage logging), access the laptop and CI need, purge protection (it would block `make destroy`), the Run Command agent, and port 80 on the web tier.
+- **GitLab CI** (`.gitlab-ci.yml`) runs fmt, validate, tflint, checkov and the unit tests on every merge request and on `main`. The pipeline has no cloud credentials at all; `main` only accepts merge requests with a green pipeline.
 - **pre-commit** runs fmt, validate, tflint, shellcheck and private-key detection on every commit.
 - **In Azure**, the whole environment was deployed and verified with the commands in [Proof it works](#proof-it-works).
 
@@ -281,6 +283,7 @@ terraform-azure-foundation/
 ├── scripts/
 │   ├── tf.sh                   # plan / apply / destroy with confirmation + subscription guard
 │   └── read-secret.sh          # runs on the VM: proves the identity can read its secret
+├── .gitlab-ci.yml              # CI: fmt, validate, tflint, checkov, tests on every MR
 ├── Makefile                    # run `make` to list every target
 ├── .tflint.hcl  .checkov.yaml  .pre-commit-config.yaml
 └── .terraform-version          # pinned Terraform version
