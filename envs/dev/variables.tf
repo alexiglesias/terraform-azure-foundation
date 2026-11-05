@@ -31,3 +31,24 @@ variable "owner" {
   type        = string
   default     = "alex"
 }
+
+# ---------------------------------------------------------------------------
+# Key Vault
+# ---------------------------------------------------------------------------
+
+variable "allowed_ip_addresses" {
+  description = "Your public IP in CIDR form (curl -s https://api.ipify.org, then add /32). Allowed through the Key Vault firewall."
+  type        = list(string)
+  default     = []
+}
+
+variable "secret_officer_principal_ids" {
+  description = "Object IDs allowed to write Key Vault secrets: you (az ad signed-in-user show --query id -o tsv), later also the CI identity."
+  type        = set(string)
+}
+
+variable "secret_expiration_date" {
+  description = "When the demo secret expires (RFC 3339)."
+  type        = string
+  default     = "2027-12-31T00:00:00Z"
+}
