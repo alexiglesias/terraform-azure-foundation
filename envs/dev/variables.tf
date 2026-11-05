@@ -52,3 +52,18 @@ variable "secret_expiration_date" {
   type        = string
   default     = "2027-12-31T00:00:00Z"
 }
+
+# ---------------------------------------------------------------------------
+# Compute
+# ---------------------------------------------------------------------------
+
+variable "admin_ssh_public_key" {
+  description = "SSH PUBLIC key for the VM admin user (cat ~/.ssh/gitlab_2026.pub). Never the private key."
+  type        = string
+}
+
+variable "vm_size" {
+  description = "VM size (free account: Standard_B2ats_v2, or Standard_B2pts_v2 with the arm64 image)."
+  type        = string
+  default     = "Standard_B2ats_v2"
+}
