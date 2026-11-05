@@ -25,3 +25,7 @@ terraform.tfvars
 
 # Lock files belong to root configurations (bootstrap, envs/*), not modules
 modules/**/.terraform.lock.hcl
+
+# CI caches (only created inside GitLab CI jobs)
+.terraform-plugin-cache/
+.tflint.d/

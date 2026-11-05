@@ -28,6 +28,8 @@ resource "azurerm_resource_group" "state" {
 resource "azurerm_storage_account" "state" {
   # checkov:skip=CKV_AZURE_33:No queues are used - state lives in blob storage. Queue logging also needs a billed log destination.
   # checkov:skip=CKV_AZURE_59:The laptop and GitLab shared runners must reach the state over the internet. Access still needs an Entra ID login with a data role - account keys are off.
+  # checkov:skip=CKV2_AZURE_33:Private endpoints are billed hourly, and the laptop and GitLab shared runners could not reach one anyway.
+  # checkov:skip=CKV2_AZURE_1:Customer-managed keys need a Key Vault key with purge protection. Microsoft-managed encryption plus infrastructure encryption are on.
   # checkov:skip=CKV_AZURE_206:LRS is the only free-tier option. Versioning + 7-day soft delete cover recovery of the state file.
   name                     = local.state_account_name
   resource_group_name      = azurerm_resource_group.state.name
@@ -65,6 +67,7 @@ resource "azurerm_storage_account" "state" {
 }
 
 resource "azurerm_storage_container" "state" {
+  # checkov:skip=CKV2_AZURE_21:Blob read logging needs diagnostic settings sending to a billed destination (Log Analytics). Versioning already records every state change.
   name                  = "tfstate"
   storage_account_id    = azurerm_storage_account.state.id
   container_access_type = "private"

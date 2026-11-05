@@ -15,6 +15,7 @@ resource "random_string" "suffix" {
 # tflint-ignore: azurerm_resources_missing_prevent_destroy
 resource "azurerm_key_vault" "this" {
   # checkov:skip=CKV_AZURE_42:Soft delete is on (7 days); only purge protection is off - see CKV_AZURE_110.
+  # checkov:skip=CKV2_AZURE_32:Private endpoints are billed hourly and need a private DNS zone. Access is limited by the firewall (one IP + the web subnet service endpoint) and RBAC.
   # checkov:skip=CKV_AZURE_110:Purge protection would block `terraform destroy` from removing this disposable dev vault for up to 90 days. Turn it on in production.
   name                = "kv-${var.short_name}-${random_string.suffix.result}"
   location            = var.location
