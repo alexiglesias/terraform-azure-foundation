@@ -16,6 +16,7 @@ resource "random_string" "suffix" {
 resource "azurerm_key_vault" "this" {
   # checkov:skip=CKV_AZURE_42:Soft delete is on (7 days); only purge protection is off - see CKV_AZURE_110.
   # checkov:skip=CKV2_AZURE_32:Private endpoints are billed hourly and need a private DNS zone. Access is limited by the firewall (one IP + the web subnet service endpoint) and RBAC.
+  # checkov:skip=CKV_AZURE_109:envs/dev sets the firewall to Allow because GitLab shared runners have changing IPs. Access still needs an RBAC role; production would use a private endpoint + a runner inside the VNet.
   # checkov:skip=CKV_AZURE_110:Purge protection would block `terraform destroy` from removing this disposable dev vault for up to 90 days. Turn it on in production.
   name                = "kv-${var.short_name}-${random_string.suffix.result}"
   location            = var.location
@@ -33,7 +34,7 @@ resource "azurerm_key_vault" "this" {
 
   # Firewall: only your laptop's IP and the web subnet get through.
   network_acls {
-    default_action             = "Deny"
+    default_action             = var.network_default_action
     bypass                     = "AzureServices"
     ip_rules                   = var.allowed_ip_addresses
     virtual_network_subnet_ids = var.allowed_subnet_ids

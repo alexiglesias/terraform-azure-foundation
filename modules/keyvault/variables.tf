@@ -72,3 +72,14 @@ variable "secret_version" {
   type        = number
   default     = 1
 }
+
+variable "network_default_action" {
+  description = "Key Vault firewall default: Deny (only allowed IPs and subnets) or Allow (any network, RBAC still required)."
+  type        = string
+  default     = "Deny"
+
+  validation {
+    condition     = contains(["Deny", "Allow"], var.network_default_action)
+    error_message = "network_default_action must be Deny or Allow."
+  }
+}

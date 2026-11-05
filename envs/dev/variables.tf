@@ -42,6 +42,12 @@ variable "allowed_ip_addresses" {
   default     = []
 }
 
+variable "key_vault_network_default_action" {
+  description = "Key Vault firewall default. Allow, because GitLab shared runners (which deploy this) have changing IPs; RBAC still protects every secret. Set Deny for laptop-only use."
+  type        = string
+  default     = "Allow"
+}
+
 variable "secret_officer_principal_ids" {
   description = "Object IDs allowed to write Key Vault secrets: you (az ad signed-in-user show --query id -o tsv), later also the CI identity."
   type        = set(string)

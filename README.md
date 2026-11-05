@@ -204,7 +204,7 @@ Success! 4 passed, 0 failed.   # network
 - **Deny-all NSG rule at priority 4000**, overriding Azure's default "allow everything inside the VNet", so 80/443 really are the only open ports on the web tier.
 - **Managed identity, least privilege.** The VM's identity has *Key Vault Secrets User* on **one secret**, not on the vault.
 - **Secrets never touch state.** The password is an *ephemeral* `random_password` sent with the *write-only* `value_wo` argument. It isn't in the plan file or the state.
-- **RBAC Key Vault behind a firewall**: default deny, allowing only one admin IP and the web subnet.
+- **RBAC Key Vault.** No access policies: every read needs a role assignment. The firewall default is `Allow` in dev because GitLab shared runners (which deploy it) have changing IPs - the module defaults to `Deny`, and production would use a private endpoint with a runner inside the VNet.
 - **Hardened state storage**: TLS 1.2, HTTPS only, no public blob access, **account keys disabled** (Entra ID login only), local users off, infrastructure encryption, versioning, 7-day soft delete, `prevent_destroy`.
 - **Azure Policy guardrail**: the built-in *Allowed locations* policy on the resource group, so Azure itself rejects resources outside Sweden Central.
 - **Trusted Launch** (secure boot + vTPM) on x64 VM sizes.
@@ -243,13 +243,45 @@ A budget in `bootstrap/` emails at 80% and 100% of £5/month and on the forecast
 | Guardrail | SCP / AWS Config | Azure Policy assignment |
 | Wrong-account guard | `allowed_account_ids` | `subscription_id` + `tf.sh` check against `az account show` |
 | Budget | AWS Budgets | Cost Management budget |
+| CI deploys with | - (CI deploys to LocalStack only) | GitLab OIDC → Entra ID federated credential, no secret |
 | Free VM | t3.micro (credit-based Free plan) | B2pts_v2 / B2ats_v2, 750 h/month |
+
+## Deploying from GitLab CI
+
+On `main`, the pipeline deploys `envs/dev` to Azure **without any password or secret stored in GitLab**:
+
+```mermaid
+flowchart LR
+    mr["Merge request<br/>fmt, validate, tflint,<br/>checkov, tests<br/>(no Azure access)"] -->|"merge"| checks["main: same checks"]
+    checks --> plan["plan<br/>saved as artifact<br/>+ plan.txt"]
+    plan --> apply["apply<br/>manual button<br/>applies that exact plan"]
+    plan -.->|"OIDC token<br/>project + branch main"| entra["Entra ID<br/>federated credential"]
+    apply -.-> entra
+```
+
+1. GitLab gives each job a short-lived **OIDC token** signed by gitlab.com, saying which project and branch it comes from.
+2. In `bootstrap/ci.tf`, an Entra ID app trusts tokens with exactly one subject: `project_path:alex.iglesias7/terraform-azure-foundation:ref_type:branch:ref:main`. Jobs on any other branch - including merge requests - cannot get into Azure at all.
+3. The `plan` job saves the plan file and a readable `plan.txt` as artifacts (visible to project members only). The `apply` job is a **manual** button and applies that exact saved plan.
+
+What the CI identity may do - least privilege, defined in `bootstrap/` so CI never manages its own permissions:
+
+| Role | Scope | Why |
+|---|---|---|
+| Storage Blob Data Contributor | State storage account | Read/write the Terraform state |
+| Reader | Subscription | Read-only lookups (e.g. the built-in policy) |
+| Contributor | `rg-azure-foundation-dev` only | Manage the environment's resources |
+| Resource Policy Contributor | `rg-azure-foundation-dev` only | Manage the allowed-locations assignment |
+| Role Based Access Control Administrator **with a condition** | `rg-azure-foundation-dev` only | Create role assignments, but **only** for *Key Vault Secrets User/Officer* - CI can never grant Owner or Contributor |
+
+**Protecting the apply.** GitLab's *protected environments* with required approvers are a Premium feature. On the free tier the same guarantees come from: a protected `main` branch (no direct pushes, merge requests need a green pipeline), a manual apply job, **protected** CI/CD variables that only exist on `main`, and Azure itself refusing tokens from any other branch. With Premium I'd add a protected `dev` environment with a required approval.
+
+CI/CD variables (all protected, none of them a secret): `ARM_CLIENT_ID`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID`, `TF_STATE_RESOURCE_GROUP`, `TF_STATE_STORAGE_ACCOUNT`, and the environment's inputs as `TF_VAR_*`.
 
 ## How it's tested
 
 - **`make test`** runs 13 `terraform test` unit tests with mock providers: no Azure login, no cost. They check the promises the design depends on - private subnets, the Key Vault service endpoint, only 80/443 open on web, the app tier reachable only from web, RBAC and default-deny on the vault, a write-only secret, no public IP, the free P6 disk, the one-secret role scope, the arm64 image on Arm sizes - and that bad input is rejected (a billed VM size, a non-public SSH key, a too-long vault name, an IP without `/32`).
 - **tflint** with the azurerm ruleset, and **checkov** for misconfigurations and leaked secrets. checkov reports **0 failed checks**. The 11 accepted findings are skipped inline, next to the resource, each with its reason: features that cost money (private endpoints, customer-managed keys, geo-replication, storage logging), access the laptop and CI need, purge protection (it would block `make destroy`), the Run Command agent, and port 80 on the web tier.
-- **GitLab CI** (`.gitlab-ci.yml`) runs fmt, validate, tflint, checkov and the unit tests on every merge request and on `main`. The pipeline has no cloud credentials at all; `main` only accepts merge requests with a green pipeline.
+- **GitLab CI** (`.gitlab-ci.yml`) runs fmt, validate, tflint, checkov and the unit tests on every merge request and on `main`, with no cloud access. On `main` it then plans and (after a manual click) applies to Azure - see [Deploying from GitLab CI](#deploying-from-gitlab-ci).
 - **pre-commit** runs fmt, validate, tflint, shellcheck and private-key detection on every commit.
 - **In Azure**, the whole environment was deployed and verified with the commands in [Proof it works](#proof-it-works).
 
@@ -272,7 +304,7 @@ A budget in `bootstrap/` emails at 80% and 100% of £5/month and on the forecast
 
 ```
 terraform-azure-foundation/
-├── bootstrap/                  # one-time: state storage account + budget alert (local state)
+├── bootstrap/                  # one-time: state storage, budget alert, GitLab CI identity (OIDC)
 ├── envs/
 │   └── dev/                    # the environment: azurerm backend, resource group, policy, module calls
 ├── modules/

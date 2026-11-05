@@ -1,9 +1,15 @@
 # =============================================================================
-# GitLab CI - Part A: offline checks on every merge request and on main.
+# GitLab CI
 #
-# None of these jobs talks to Azure: no credentials exist in this pipeline.
-# They run the same checks as `make ci` on the laptop:
+# Every merge request and main: offline checks, no Azure access at all -
 #   fmt + validate  ->  tflint  ->  checkov  ->  terraform test (mock providers)
+#
+# main only: deploy envs/dev to Azure -
+#   plan (saved as an artifact)  ->  apply (manual button, applies that plan)
+#
+# The deploy jobs sign in with OIDC: GitLab gives each job a signed token, and
+# Azure (bootstrap/ci.tf) only accepts tokens from this project's main branch.
+# There is no Azure password or secret anywhere in GitLab.
 #
 # A merge request can only be merged when this pipeline is green
 # (Settings > Merge requests > "Pipelines must succeed").
@@ -22,6 +28,8 @@ stages:
   - validate
   - security
   - test
+  - plan
+  - apply
 
 variables:
   # Providers are downloaded once per pipeline cache, not once per folder.
@@ -86,3 +94,59 @@ terraform-test:
         terraform -chdir=$m init -backend=false -input=false >/dev/null
         terraform -chdir=$m test
       done
+
+# =============================================================================
+# Deploy to Azure - main branch only
+# =============================================================================
+
+# Shared settings for the jobs that talk to Azure.
+.azure:
+  extends: .terraform
+  # GitLab puts a signed OIDC token for this job in $ARM_OIDC_TOKEN. The
+  # azurerm provider and backend swap it for an Azure access token.
+  id_tokens:
+    ARM_OIDC_TOKEN:
+      aud: api://AzureADTokenExchange
+  variables:
+    ARM_USE_OIDC: "true"
+    # ARM_CLIENT_ID, ARM_TENANT_ID and ARM_SUBSCRIPTION_ID are protected
+    # CI/CD variables: they only exist in pipelines on protected branches.
+    TF_VAR_subscription_id: $ARM_SUBSCRIPTION_ID
+  before_script:
+    - mkdir -p "$TF_PLUGIN_CACHE_DIR"
+    - >
+      terraform -chdir=envs/dev init -input=false
+      -backend-config="resource_group_name=$TF_STATE_RESOURCE_GROUP"
+      -backend-config="storage_account_name=$TF_STATE_STORAGE_ACCOUNT"
+      -backend-config="container_name=tfstate"
+      -backend-config="use_azuread_auth=true"
+      -backend-config="use_oidc=true"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+plan:
+  extends: .azure
+  stage: plan
+  resource_group: azure-dev # one job at a time touches the dev state
+  script:
+    - terraform -chdir=envs/dev plan -input=false -out=dev.tfplan
+    - terraform -chdir=envs/dev show -no-color dev.tfplan > plan.txt
+  artifacts:
+    paths:
+      - envs/dev/dev.tfplan
+      - plan.txt
+    expire_in: 1 week
+    access: developer # plan files are for project members, not the public
+
+apply:
+  extends: .azure
+  stage: apply
+  needs: [plan] # applies exactly the plan saved by this pipeline
+  resource_group: azure-dev
+  environment:
+    name: dev
+  script:
+    - terraform -chdir=envs/dev apply -input=false dev.tfplan
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual # a person reads plan.txt, then clicks apply

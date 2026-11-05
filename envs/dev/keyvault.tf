@@ -8,6 +8,7 @@ module "keyvault" {
   resource_group_name = azurerm_resource_group.main.name
   tags                = local.tags
 
+  network_default_action       = var.key_vault_network_default_action
   allowed_ip_addresses         = var.allowed_ip_addresses
   allowed_subnet_ids           = [module.network.subnet_ids["web"]]
   secret_officer_principal_ids = var.secret_officer_principal_ids

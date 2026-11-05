@@ -13,4 +13,9 @@ provider "azurerm" {
 
   # Use your Entra ID login for storage, never storage account keys.
   storage_use_azuread = true
+
+  # Don't try to register Azure resource providers on every run: they are
+  # already registered, and the CI identity deliberately has no
+  # subscription-wide write permission to do it.
+  resource_provider_registrations = "none"
 }

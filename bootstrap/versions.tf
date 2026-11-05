@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/local"
       version = "~> 2.5"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.0"
+    }
   }
 
   # No backend block: the bootstrap creates the storage account that holds
