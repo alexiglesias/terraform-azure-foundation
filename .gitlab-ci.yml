@@ -88,6 +88,10 @@ terraform-test:
   extends: .terraform
   stage: test
   script:
+    # On main, the protected TF_VAR_* deploy settings (e.g. the Arm VM size)
+    # are in every job's environment. Unit tests must only use their own
+    # inputs, so drop them here.
+    - for v in $(env | sed -n 's/^\(TF_VAR_[^=]*\)=.*/\1/p'); do unset "$v"; done
     - |
       for m in modules/*/; do
         echo "== $m"
