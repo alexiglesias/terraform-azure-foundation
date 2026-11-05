@@ -26,6 +26,9 @@ resource "azurerm_resource_group" "state" {
 }
 
 resource "azurerm_storage_account" "state" {
+  # checkov:skip=CKV_AZURE_33:No queues are used - state lives in blob storage. Queue logging also needs a billed log destination.
+  # checkov:skip=CKV_AZURE_59:The laptop and GitLab shared runners must reach the state over the internet. Access still needs an Entra ID login with a data role - account keys are off.
+  # checkov:skip=CKV_AZURE_206:LRS is the only free-tier option. Versioning + 7-day soft delete cover recovery of the state file.
   name                     = local.state_account_name
   resource_group_name      = azurerm_resource_group.state.name
   location                 = azurerm_resource_group.state.location
@@ -65,6 +68,11 @@ resource "azurerm_storage_container" "state" {
   name                  = "tfstate"
   storage_account_id    = azurerm_storage_account.state.id
   container_access_type = "private"
+
+  # The container holds every state file - never delete it by accident.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # Old state versions are only useful for a while - delete them so the

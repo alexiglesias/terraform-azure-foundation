@@ -27,6 +27,7 @@ resource "azurerm_network_interface" "this" {
 # ---------------------------------------------------------------------------
 
 resource "azurerm_linux_virtual_machine" "this" {
+  # checkov:skip=CKV_AZURE_50:The VM agent extension is needed for Run Command - the only admin path, since there is no SSH and no public IP.
   name                  = "vm-${var.name}"
   location              = var.location
   resource_group_name   = var.resource_group_name

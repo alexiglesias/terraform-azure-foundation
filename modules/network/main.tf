@@ -33,6 +33,7 @@ resource "azurerm_subnet" "this" {
 # ---------------------------------------------------------------------------
 
 resource "azurerm_network_security_group" "web" {
+  # checkov:skip=CKV_AZURE_160:Intended - this is the web tier, and 80/443 are the only ports it opens. Everything else is denied at priority 4000.
   name                = "nsg-${var.name}-web"
   location            = var.location
   resource_group_name = var.resource_group_name
