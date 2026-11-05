@@ -40,3 +40,15 @@ variable "budget_alert_email" {
     error_message = "budget_alert_email must be a valid email address - an alert nobody receives is not an alert."
   }
 }
+
+variable "gitlab_project_path" {
+  description = "GitLab project (namespace/name) whose main-branch pipelines may sign in to Azure."
+  type        = string
+  default     = "alex.iglesias7/terraform-azure-foundation"
+}
+
+variable "dev_resource_group_name" {
+  description = "Resource group managed by envs/dev. The CI identity gets its write roles on this group only. Must already exist."
+  type        = string
+  default     = "rg-azure-foundation-dev"
+}
