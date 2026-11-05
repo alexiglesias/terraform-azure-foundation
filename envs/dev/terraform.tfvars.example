@@ -3,5 +3,10 @@
 
 subscription_id = "00000000-0000-0000-0000-000000000000" # az account show --query id -o tsv
 
-# location = "swedencentral"
-# owner    = "alex"
+# Key Vault
+allowed_ip_addresses         = ["203.0.113.10/32"]                        # curl -s https://api.ipify.org  (+ /32)
+secret_officer_principal_ids = ["00000000-0000-0000-0000-000000000000"] # az ad signed-in-user show --query id -o tsv
+
+# location               = "swedencentral"
+# owner                  = "alex"
+# secret_expiration_date = "2027-12-31T00:00:00Z"
