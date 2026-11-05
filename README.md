@@ -189,7 +189,7 @@ Policy identifiers: '[{"policyAssignment":{"name":"Allowed locations: swedencent
 
 ```
 $ make security
-Passed checks: 35, Failed checks: 0, Skipped checks: 11
+Passed checks: 35, Failed checks: 0, Skipped checks: 12
 
 $ make test
 Success! 5 passed, 0 failed.   # compute
@@ -280,7 +280,7 @@ CI/CD variables (all protected, none of them a secret): `ARM_CLIENT_ID`, `ARM_TE
 ## How it's tested
 
 - **`make test`** runs 13 `terraform test` unit tests with mock providers: no Azure login, no cost. They check the promises the design depends on - private subnets, the Key Vault service endpoint, only 80/443 open on web, the app tier reachable only from web, RBAC and default-deny on the vault, a write-only secret, no public IP, the free P6 disk, the one-secret role scope, the arm64 image on Arm sizes - and that bad input is rejected (a billed VM size, a non-public SSH key, a too-long vault name, an IP without `/32`).
-- **tflint** with the azurerm ruleset, and **checkov** for misconfigurations and leaked secrets. checkov reports **0 failed checks**. The 11 accepted findings are skipped inline, next to the resource, each with its reason: features that cost money (private endpoints, customer-managed keys, geo-replication, storage logging), access the laptop and CI need, purge protection (it would block `make destroy`), the Run Command agent, and port 80 on the web tier.
+- **tflint** with the azurerm ruleset, and **checkov** for misconfigurations and leaked secrets. checkov reports **0 failed checks**. The 12 accepted findings are skipped inline, next to the resource, each with its reason: features that cost money (private endpoints, customer-managed keys, geo-replication, storage logging), access the laptop and CI need (including the Key Vault firewall default), purge protection (it would block `make destroy`), the Run Command agent, and port 80 on the web tier.
 - **GitLab CI** (`.gitlab-ci.yml`) runs fmt, validate, tflint, checkov and the unit tests on every merge request and on `main`, with no cloud access. On `main` it then plans and (after a manual click) applies to Azure - see [Deploying from GitLab CI](#deploying-from-gitlab-ci).
 - **pre-commit** runs fmt, validate, tflint, shellcheck and private-key detection on every commit.
 - **In Azure**, the whole environment was deployed and verified with the commands in [Proof it works](#proof-it-works).
